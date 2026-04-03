@@ -409,9 +409,17 @@ Then treat this runbook as the investigation plan for the AD/DC side.
 ## Sources
 
 Official Aruba and Microsoft references used for this runbook:
-- Aruba: Joining a Policy Manager Server to an Active Directory Domain
-- Aruba: `show domain` command reference
+- Aruba: Joining a ClearPass Server to an Active Directory Domain
+  - https://arubanetworking.hpe.com/techdocs/ClearPass/6.11/PolicyManager/Content/Deploy/Active%20Directory/Joining_AD_domain.htm
+- Aruba: ClearPass CLI Guide PDF (`show domain` command reference)
+  - https://arubanetworking.hpe.com/techdocs/ClearPass/ClearPass_CLI_Guide.pdf
 - Aruba: ClearPass Service Routing
+  - https://arubanetworking.hpe.com/techdocs/NAC/clearpass/platform/service-routing/
 - Microsoft: Locating domain controllers in Windows and Windows Server
+  - https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/dc-locator
+- Microsoft: Locating Active Directory Domain Controllers in Windows and Windows Server
+  - https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/dc-locator-changes
 - Microsoft: How to configure a firewall for Active Directory domains and trusts
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-server/active-directory/config-firewall-for-ad-domains-and-trusts
 - Secondary field reference: Philipp Koch blog on ClearPass + RODC + PEAP-MSCHAPv2
+  - https://blog.philipp-koch.net/2021/11/clearpass-read-only-domain-controller.html
