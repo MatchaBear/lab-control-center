@@ -74,6 +74,10 @@ If your goal is "I want to...":
 - Open: [PUBLISHING_SECURITY_AUDIT_2026-04-03.md](./PUBLISHING_SECURITY_AUDIT_2026-04-03.md)
 - Open: [CPPM_HOST_PORT_MAP_2026-04-03.md](./CPPM_HOST_PORT_MAP_2026-04-03.md)
 
+18. Investigate ClearPass AD site mismatch and `show domain` offline behavior
+- Open: [CLEARPASS_AD_SITE_OFFLINE_LAB_2026.md](./CLEARPASS_AD_SITE_OFFLINE_LAB_2026.md)
+- Baseline Windows build: [WINDOWS_AD_TEMPLATE_VM_GUIDE_2026.md](./WINDOWS_AD_TEMPLATE_VM_GUIDE_2026.md)
+
 ---
 
 ## Recommended Order (First Time User)
