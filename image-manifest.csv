@@ -1,0 +1,11 @@
+vendor,product,version,filename,sha256,source_url,license_type,expiry_date,notes
+Canonical,Ubuntu Server,24.04.x LTS,ubuntu-24.04-live-server-amd64.iso,,https://ubuntu.com/download/server,Free,,"Use for Linux infra VM or utility hosts"
+Microsoft,Windows Server Evaluation,2022/2025,Windows_Server_Eval.iso,,https://www.microsoft.com/evalcenter/,Evaluation,,"Use for AD DS + DNS + ADCS lab"
+Cisco,CML Free,2.9.x,,,https://developer.cisco.com/docs/modeling-labs/2-9/cml-free/,Free Tier,,"Use legal Cisco image access within CML scope"
+Cisco,Cisco ISE,3.x,,,https://software.cisco.com/,Evaluation,,"Needed for TACACS over TLS 1.3 test window"
+Palo Alto,VM-Series,latest trial,,,https://www.paloaltonetworks.com/vm-series-trial,Trial,,"Download only from official trial portal"
+Fortinet,FortiGate-VM,latest eval,,,https://www.fortinet.com/support/product-downloads,Trial,,"Requires Fortinet account/eval entitlement"
+Check Point,CloudGuard Network Security,latest trial,,,https://community.checkpoint.com/,Trial,,"Use Check Point official trial/eval guidance"
+F5,BIG-IP VE,latest trial,,,https://www.f5.com/trials/big-ip-virtual-edition,Trial,,"Useful for load balancer tests"
+Juniper,vSRX,latest trial,,,https://www.juniper.net/us/en/dm/free-vsrx-trial.html,Trial,,"For Juniper security lab slice"
+Arista,vEOS/cEOS-lab,current,,,https://www.arista.com/en/support/software-download,Trial/Account Required,,"Check current entitlement model"

@@ -1,0 +1,24 @@
+# OS and editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.tmp
+*.bak
+.vscode/
+.idea/
+
+# Private local-only session residue and evidence
+codex_session.txt
+hardening_ubuntu.txt
+ssh vv o Ciphers aes256_remote_ubuntu_to_MacbookAir.txt
+tcpdump-exceed-codex-limit/
+private/
+
+# Generated test evidence and packet captures
+test-evidence/
+captures/
+*.pcap
+*.pcapng
+*.cap
+*.keylog

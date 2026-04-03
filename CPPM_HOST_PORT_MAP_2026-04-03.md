@@ -131,6 +131,6 @@ ssh -p 2224 <cppm612_user>@192.168.68.127
 
 ## Related files
 
-- [CPPM611_DUAL_NIC_NETWORKS_2026.md](/home/hadescloak/Desktop/Projects/lab-control-center/CPPM611_DUAL_NIC_NETWORKS_2026.md)
-- [SSH_FORWARD_EVE_FIX.md](/home/hadescloak/Desktop/Projects/lab-control-center/SSH_FORWARD_EVE_FIX.md)
-- [cppm611_update_connectivity_report_2026-04-03.md](/home/hadescloak/Desktop/Projects/lab-control-center/cppm611_update_connectivity_report_2026-04-03.md)
+- [CPPM611_DUAL_NIC_NETWORKS_2026.md](./CPPM611_DUAL_NIC_NETWORKS_2026.md)
+- [SSH_FORWARD_EVE_FIX.md](./SSH_FORWARD_EVE_FIX.md)
+- [cppm611_update_connectivity_report_2026-04-03.md](./cppm611_update_connectivity_report_2026-04-03.md)
