@@ -34,7 +34,7 @@ Main result:
 ### Pass 3: Personal data and path leakage scan
 
 Searched for:
-- `/home/hadescloak/...`
+- `$REPO_DIR/...`
 - personal usernames
 - Codex resume IDs
 - email-style strings
@@ -56,7 +56,7 @@ Checked whether the repo had:
 Main result:
 - `.gitignore` was missing
 - local-only artifacts were mixed into the publishable root
-- a few key scripts hardcoded `/home/hadescloak/...`
+- a few key scripts hardcoded `$REPO_DIR/...`
 - several markdown links were local-filesystem oriented instead of repo oriented
 
 ### Pass 5: Final pre-publish hardening review
@@ -118,5 +118,5 @@ git ls-files
 Check for remaining local home-path leakage:
 
 ```bash
-grep -RIn '/home/hadescloak' . --exclude-dir=.git
+grep -RIn '<local-user-home>' . --exclude-dir=.git
 ```

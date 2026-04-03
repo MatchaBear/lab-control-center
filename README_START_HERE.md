@@ -6,7 +6,7 @@ Last updated: 2026-04-03
 
 This is the master navigation page for all documents in:
 
-`/home/hadescloak/Desktop/Projects/lab-control-center`
+`$REPO_DIR`
 
 Use this file first.
 
