@@ -9,7 +9,7 @@ Last updated: 2026-03-27
 Yes, you can host VM disks on a removable SSD (like SanDisk) and move the lab to another machine.
 
 Best practice:
-- Keep **configs/scripts** in your home folder (`/home/hadescloak/Desktop/Projects/lab-control-center`).
+- Keep **configs/scripts** in your home folder (``).
 - Keep **VM disks** on the removable SSD.
 - Export each VM XML + disk image.
 - Re-import on new host with the same VM names/network plan.
@@ -41,7 +41,7 @@ Not ideal:
 Portable:
 - `.qcow2` VM disk files
 - VM XML definitions (with path edits)
-- Your bootstrap scripts/docs in `/home/hadescloak/Desktop/Projects/lab-control-center`
+- Your bootstrap scripts/docs in ``
 - Most Linux/Windows generic VMs
 
 Less portable / needs care:
@@ -62,7 +62,7 @@ Inside:
 - `images/` (all `.qcow2`)
 - `xml/` (VM XML exports)
 - `networks/` (libvirt network XML)
-- `bootstrap/` (copy of `/home/hadescloak/Desktop/Projects/lab-control-center`)
+- `bootstrap/` (copy of ``)
 - `manifest.txt` (what each VM is for, RAM/vCPU, boot order)
 
 ---
