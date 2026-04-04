@@ -2,7 +2,7 @@
 
 Contributors: bermekbukair, Codex
 
-Last updated: 2026-04-02
+Last updated: 2026-04-03
 
 ## Goal
 
@@ -218,6 +218,7 @@ When you need a new lab server:
 1. clone the VM disk and XML
 2. define new VM
 3. boot the clone
+
 4. rename it for its actual role
 5. set static IP
 6. then promote or configure services
@@ -298,3 +299,13 @@ Do the same later for 2025 only if you specifically want side-by-side testing.
 - Clone VM: actual AD/DNS/ADCS server
 - Snapshot timing: after updates, before any identity role
 - Best lab habit: rebuild from template, do not endlessly repair a dirty server
+
+## Appendix: Manual AD and DNS firewall rule set
+
+The full manual port-based ruleset for `dns-adcs01` is documented in [WINDOWS_DC_FIREWALL_RULESET_2026.md](/home/hadescloak/Desktop/Projects/lab-control-center/WINDOWS_DC_FIREWALL_RULESET_2026.md).
+
+That runbook includes:
+
+- the exact `New-NetFirewallRule` commands
+- the LDAPS verification command and observed output
+- notes on `TCP 135`, `UDP 135`, and `LDAPS`

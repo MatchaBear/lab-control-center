@@ -14,6 +14,7 @@ hardening_ubuntu.txt
 ssh vv o Ciphers aes256_remote_ubuntu_to_MacbookAir.txt
 tcpdump-exceed-codex-limit/
 private/
+private-media/
 
 # Generated test evidence and packet captures
 test-evidence/

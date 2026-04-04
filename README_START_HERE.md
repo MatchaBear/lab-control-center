@@ -70,11 +70,17 @@ If your goal is "I want to...":
 16. Access eve-ng SSH from another LAN host (port 2222 forward fix)
 - Open: [SSH_FORWARD_EVE_FIX.md](./SSH_FORWARD_EVE_FIX.md)
 
-17. Review publish hardening and the current ClearPass host port map
+17. Understand CML controller access, port `22` versus `1122`, and current interface roles
+- Open: [CML_CONTROLLER_ACCESS_AND_INTERFACES.md](./CML_CONTROLLER_ACCESS_AND_INTERFACES.md)
+
+18. Review what is already built and tested in the CML environment
+- Open: [CML_BUILD_STATUS_AND_CODEX_NOTES_2026-04-04.md](./CML_BUILD_STATUS_AND_CODEX_NOTES_2026-04-04.md)
+
+19. Review publish hardening and the current ClearPass host port map
 - Open: [PUBLISHING_SECURITY_AUDIT_2026-04-03.md](./PUBLISHING_SECURITY_AUDIT_2026-04-03.md)
 - Open: [CPPM_HOST_PORT_MAP_2026-04-03.md](./CPPM_HOST_PORT_MAP_2026-04-03.md)
 
-18. Investigate ClearPass AD site mismatch and `show domain` offline behavior
+20. Investigate ClearPass AD site mismatch and `show domain` offline behavior
 - Open: [CLEARPASS_AD_SITE_OFFLINE_LAB_2026.md](./CLEARPASS_AD_SITE_OFFLINE_LAB_2026.md)
 - Baseline Windows build: [WINDOWS_AD_TEMPLATE_VM_GUIDE_2026.md](./WINDOWS_AD_TEMPLATE_VM_GUIDE_2026.md)
 

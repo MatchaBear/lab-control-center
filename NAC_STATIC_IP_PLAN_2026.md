@@ -45,7 +45,12 @@ Current DHCP-learned addresses on `virbr0`:
 - `cppm611-clabv`: `192.168.122.252` and `192.168.122.102`
 - `cppm612-clabv`: `192.168.122.40` and `192.168.122.114`
 
-These are useful for current access, but the recommended plan below is the clean static layout to move to.
+These are useful for current access. For `cml-core01`, the observed live address `192.168.122.210` is also the documented access address to use unless and until a deliberate re-IP changes it.
+
+Current CML access:
+
+- CML UI: `https://192.168.122.210`
+- CML web console: `http://cml-core01:9090`
 
 ## Outer Management and AAA Subnet
 
@@ -67,7 +72,7 @@ These are useful for current access, but the recommended plan below is the clean
 | Separate issuing CA | `issuingca01.lab` | `192.168.122.12` | Reserve for later 2-tier split |
 | Syslog + SNMP | `logsnmp01.lab` | `192.168.122.20` | Optional early; useful once switches are alive |
 | EVE-NG | `eve-ng.lab` | `192.168.122.30` | Keep static, but do not co-run with heavy CML windows |
-| CML core | `cml-core01.lab` | `192.168.122.31` | Main CML GUI and API host |
+| CML core | `cml-core01.lab` | `192.168.122.210` | Main CML GUI and API host; current live address |
 | ClearPass 6.11 | `cppm611-clabv.lab` | `192.168.122.41` | Single active management NIC recommended |
 | ClearPass 6.12 | `cppm612-clabv.lab` | `192.168.122.42` | Prefer this as the primary ClearPass build |
 | ISE primary admin/policy | `ise-pan01.lab` | `192.168.122.60` | First ISE node to build |
@@ -138,7 +143,7 @@ Final shape to build first:
 
 1. Outer host and libvirt layer
 - `dns-adcs01.lab` at `192.168.122.10`
-- `cml-core01.lab` at `192.168.122.31`
+- `cml-core01.lab` at `192.168.122.210`
 - `cppm612-clabv.lab` at `192.168.122.42`
 - `logsnmp01.lab` at `192.168.122.20` when ready
 
@@ -157,7 +162,7 @@ Final shape to build first:
 
 ## What to build first
 
-1. Re-IP `cml-core01` to `192.168.122.31`
+1. Keep `cml-core01` at `192.168.122.210`
 2. Re-IP `cppm612-clabv` to `192.168.122.42`
 3. Keep `cppm611-clabv` parked at `192.168.122.41` as the comparison node, not the daily driver
 4. Build `dns-adcs01.lab` at `192.168.122.10`
@@ -187,7 +192,7 @@ Best first dashboard features:
 
 1. show running VMs and their static IPs
 2. show which stack is active: `ClearPass`, `ISE`, `CML`, `EVE`
-3. ping or TCP checks for `192.168.122.10`, `192.168.122.31`, `192.168.122.42`, and `192.168.122.60`
+3. ping or TCP checks for `192.168.122.10`, `192.168.122.210`, `192.168.122.42`, and `192.168.122.60`
 4. show CML GUI URL and NAC GUI URLs
 5. start and stop approved VM groups
 6. show doc shortcuts from this folder
