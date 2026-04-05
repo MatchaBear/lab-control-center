@@ -61,6 +61,8 @@ Current truth:
 - `OCSPSvc` is running
 - `ocsp.msc` shows revocation configuration `LAB-ISSUINGCA-01` as `Working`
 - issuing CA AIA/CDP HTTP embedding has now been corrected for future issued certificates
+- issuing CA HTTP publication hostname has now been corrected to `pki.lab.local`
+- issuing CA OCSP hostname has now been corrected to `ocsp.lab.local`
 - the earlier `Bad signing certificate on Array controller` error was fixed by:
   - granting `WS25-ICA01` template permissions on `OCSP Response Signing`
   - forcing policy/autoenrollment refresh
@@ -71,6 +73,8 @@ Current truth:
 - client-side OCSP verification on a newly issued leaf certificate is now proven
 - remaining issue:
   - HTTP delta CRL URL for `LAB-ISSUINGCA-01+.crl` still returns `404`
+  - file existence is confirmed in both the CA publish folder and IIS webroot
+  - the issue is now isolated to HTTP serving of the `+` filename
   - this is currently a cleanup item, not a blocker
 
 ## Decision
@@ -85,11 +89,12 @@ Reason:
 - OCSP server-side configuration is now good
 - client-side OCSP validation on a new issuing-CA leaf certificate is now captured
 - remaining delta CRL HTTP `404` does not prevent successful revocation checks in the current lab state
+- remaining delta CRL issue is isolated and no longer ambiguous
 
 ## Minimum next step
 
 Next phase should be:
 
-1. record the delta CRL `404` as a cleanup item
+1. optionally clean up the delta CRL HTTP `404`
 2. begin certificate templates and enrollment
 3. keep manual CRL and OCSP verification commands available during template rollout

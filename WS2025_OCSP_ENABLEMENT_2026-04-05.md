@@ -831,6 +831,184 @@ Templates and enrollment can move forward once this state is recorded, because:
 - server-side OCSP is good
 - client-side OCSP on a new leaf cert is good
 
+## Hostname cleanup for HTTP publication
+
+### Why this was still necessary
+
+Even after the OCSP responder was proven to work, the first corrected leaf certificate still showed that the issuing CA was advertising:
+
+- AIA HTTP URL under:
+  - `ws25-ica01.lab.local`
+- CDP HTTP URLs under:
+  - `ws25-ica01.lab.local`
+
+That conflicted with the lab’s intended publication model:
+
+- CA/CRL publication host:
+  - `pki.lab.local`
+- OCSP responder host:
+  - `ocsp.lab.local`
+
+### What was actually found
+
+On `ws25-ica01`:
+
+```powershell
+certutil -getreg CA\CACertPublicationURLs
+certutil -getreg CA\CRLPublicationURLs
+```
+
+showed that the HTTP entries still used `%1`, which expands to the CA server DNS name.
+
+This meant newly issued certificates were still being stamped with:
+
+- `http://ws25-ica01.lab.local/...`
+
+instead of:
+
+- `http://pki.lab.local/...`
+
+### What was actually changed
+
+In `certsrv.msc` -> `LAB-ISSUINGCA-01` -> `Properties` -> `Extensions`:
+
+#### CDP
+
+Removed the old variable-based HTTP line:
+
+- `http://%1/CertEnroll/%3%8%9.crl`
+
+Added the explicit publication host line:
+
+- `http://pki.lab.local/CertEnroll/%3%8%9.crl`
+
+For that explicit `pki.lab.local` CDP line, enabled:
+
+- `Include in CRLs. Clients use this to find Delta CRL locations`
+- `Include in the CDP extension of issued certificates`
+
+#### AIA
+
+Removed the old variable-based HTTP line:
+
+- `http://%1/CertEnroll/%1_%3%4.crt`
+
+Added the explicit publication host line:
+
+- `http://pki.lab.local/CertEnroll/%1_%3%4.crt`
+
+For that explicit `pki.lab.local` AIA line, enabled:
+
+- `Include in the AIA extension of issued certificates`
+
+The dedicated OCSP line remained separate:
+
+- `http://ocsp.lab.local/ocsp`
+
+with only:
+
+- `Include in the online certificate status protocol (OCSP) extension`
+
+### What was done after the change
+
+After applying the changes:
+
+- CA service restart was accepted
+- CRLs were regenerated
+- CA cert/CRL files were recopied to the IIS publication folder
+- `OCSPSvc` was restarted
+
+## Final hostname-proof leaf certificate
+
+### Why another fresh leaf cert was needed
+
+As before, extension changes only affect **newly issued certificates**.
+
+So one more fresh `Web Server` leaf certificate was required after the publication-host cleanup.
+
+### Final hostname-correct test leaf certificate
+
+Thumbprint:
+
+- `5032DA60683AAD68E61605D1171EDF54B2D11B39`
+
+Export file:
+
+- `C:\CAConfig\ws25-ica01-webserver-test-pkihost-fixed.cer`
+
+### What the DC-side verification proved
+
+When the DC verified:
+
+```powershell
+certutil -urlfetch -verify C:\Windows\Temp\ws25-ica01-webserver-test-pkihost-fixed.cer
+```
+
+the output showed:
+
+- AIA HTTP now correctly under:
+  - `http://pki.lab.local/CertEnroll/ws25-ica01.lab.local_LAB-ISSUINGCA-01.crt`
+- OCSP now correctly under:
+  - `http://ocsp.lab.local/ocsp`
+- revocation still passed
+
+So the hostname cleanup is complete.
+
+## What the remaining delta CRL 404 now really means
+
+At this point the remaining bad line is narrowed down to:
+
+- `http://pki.lab.local/CertEnroll/LAB-ISSUINGCA-01+.crl`
+
+Observed result:
+
+- `404 Not found`
+
+### What was disproven
+
+This is **not** because the delta CRL file is missing.
+
+The file was directly confirmed to exist in both places:
+
+- `C:\Windows\System32\CertSrv\CertEnroll\LAB-ISSUINGCA-01+.crl`
+- `C:\inetpub\wwwroot\CertEnroll\LAB-ISSUINGCA-01+.crl`
+
+So publication to disk is working.
+
+### Current narrowed root cause
+
+The remaining problem is now isolated to the HTTP serving path for the `+` filename.
+
+Most likely categories:
+
+- IIS/request-filtering/URL handling around the plus sign
+- path/virtual directory handling specific to that filename form
+
+It is no longer a CA publication problem.
+
+## Final current state before delta-CRL cleanup
+
+What is fully proven:
+
+- root CA publication healthy
+- issuing CA publication healthy
+- AIA host corrected to `pki.lab.local`
+- OCSP host corrected to `ocsp.lab.local`
+- OCSP verified from a Windows client on a fresh leaf certificate
+- overall leaf revocation check passes
+
+What is still imperfect:
+
+- HTTP delta CRL fetch for:
+  - `LAB-ISSUINGCA-01+.crl`
+  returns `404`
+
+What this means operationally:
+
+- the PKI core is working
+- revocation works
+- the remaining issue is a narrow web-serving cleanup item, not a broad PKI design failure
+
 ## Operational lessons from this phase
 
 ### Lesson 1
