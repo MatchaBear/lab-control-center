@@ -494,3 +494,114 @@ Continue with:
 4. register it against the `desktop` node definition
 
 That is the cleanest path from the current state.
+
+---
+
+## Later design correction: use a lighter Windows client, not only Server
+
+The earlier Windows Server endpoint work was still useful because it proved:
+
+- CML custom Windows images are viable
+- the real problems were firmware and virtual hardware matching
+- CML node-definition behavior matters more than the Windows family name
+
+But the user explicitly wanted a lighter endpoint and wanted to avoid Server edition if possible.
+
+### Official client media actually used
+
+The public Windows 10 LTSC evaluation path was no longer reliable and redirected away.
+
+So the lighter official client image that was actually obtained was:
+
+- `Windows 11 IoT Enterprise LTSC Evaluation`
+
+Exact ISO:
+
+- `/home/hadescloak/Downloads/26100.1742.240906-0331.ge_release_svc_refresh_CLIENT_IOT_LTSC_EVAL_x64FRE_en-us.iso`
+
+### Why the install was done on local libvirt first
+
+Installing Windows directly inside CML is possible in theory, but it is the worse operator experience.
+
+The safer workflow is:
+
+1. install the client OS on local libvirt
+2. verify it reaches a real Windows desktop
+3. shut it down cleanly
+4. detach the ISO
+5. boot-test from disk only
+6. import the finished qcow2 into CML
+
+Why:
+
+- Windows setup itself is simpler outside CML
+- this avoids mixing installer problems with CML node-definition problems
+- it also avoids creating unnecessary duplicate qcow2 files
+
+### Local Windows IoT LTSC build result
+
+Final local disk:
+
+- `/home/hadescloak/win-endpoint-client.qcow2`
+
+Observed shape:
+
+- `64G` virtual size
+- about `11.9G` real disk usage after install
+
+VM used during installation:
+
+- `win-endpoint-client-install`
+
+Working hardware profile during local install:
+
+- UEFI
+- TPM 2.0
+- `q35`
+- SATA system disk
+- `e1000` NIC
+- QXL video
+
+Observed success milestone:
+
+- Windows desktop was reached successfully
+
+That means:
+
+- the local client image is valid
+- it is a better long-term endpoint candidate than the heavier Windows Server image
+
+### Controller-side staging result
+
+The finished client qcow2 was uploaded to the CML controller.
+
+Practical upload flow used:
+
+1. upload into:
+   - `/var/tmp/win-endpoint-client.qcow2`
+2. move with `sudo` into:
+   - `/var/local/virl2/dropfolder/win-endpoint-client.qcow2`
+
+Reason:
+
+- direct write to the dropfolder as `sysadmin` was denied
+- `/var` had enough free space
+
+Current staged CML import file:
+
+- `/var/local/virl2/dropfolder/win-endpoint-client.qcow2`
+
+### Engineering implication
+
+At this point there are now two distinct Windows endpoint tracks in the lab:
+
+1. BIOS-style Windows Server endpoint work, useful for understanding CML custom hardware matching
+2. UEFI-based Windows 11 IoT LTSC client image, which is the better non-Server endpoint candidate
+
+The next meaningful question is no longer “can Windows run in CML?”
+
+That has already been proven.
+
+The next question is:
+
+- which CML node-definition and image-definition combination cleanly boots the UEFI-based Windows 11 IoT LTSC client image

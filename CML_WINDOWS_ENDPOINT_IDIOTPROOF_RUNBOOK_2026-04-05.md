@@ -1373,3 +1373,123 @@ Important:
 - do not interrupt the node while it is on `Getting devices ready`
 - do not wipe it
 - allow Windows time to finish hardware detection and any automatic reboot it decides to do
+
+---
+
+## New lighter client path: Windows 11 IoT Enterprise LTSC
+
+After the Windows Server endpoint was proven workable but painful, a lighter non-Server client path was added.
+
+Why this path was chosen:
+
+- the public Windows 10 LTSC evaluation path was redirecting away and was not usable
+- the user wanted a lighter endpoint and explicitly wanted to avoid Server edition
+- Windows 11 IoT Enterprise LTSC was available as an official public evaluation ISO
+
+ISO used:
+
+- `/home/hadescloak/Downloads/26100.1742.240906-0331.ge_release_svc_refresh_CLIENT_IOT_LTSC_EVAL_x64FRE_en-us.iso`
+
+Installed target disk:
+
+- `/home/hadescloak/win-endpoint-client.qcow2`
+
+Meaning:
+
+- this is the lighter Windows endpoint image that will later be imported into CML
+- the install was intentionally done on local libvirt first, not inside CML
+- that is safer because Windows setup is easier to complete outside CML
+
+### Exact local build shape that worked
+
+VM name used during install:
+
+- `win-endpoint-client-install`
+
+Key hardware choices that were used:
+
+- UEFI firmware
+- TPM 2.0 enabled
+- `q35` machine type
+- SATA boot disk
+- `e1000` NIC
+- QXL video
+
+Meaning:
+
+- this matches what modern Windows 11 expects much better than the earlier BIOS-style Server endpoint
+
+### What “done” looks like for this lighter client image
+
+The install is considered complete only when:
+
+- OOBE finished
+- a usable Windows desktop appeared
+- the VM could then be shut down cleanly
+
+Observed result:
+
+- the Windows desktop was reached successfully
+- the qcow2 settled at roughly `11.9G` on disk
+
+### Clean-up step after install
+
+After Windows finished installing:
+
+1. shut down `win-endpoint-client-install`
+2. detach the ISO from the VM definition
+3. boot the VM from disk only
+4. only after that, treat the qcow2 as the final import candidate
+
+Meaning:
+
+- if the VM only boots when the ISO is still attached, the image is not ready
+- a real CML image must boot from its own disk
+
+### Current lighter-client file state
+
+Current final candidate image:
+
+- `/home/hadescloak/win-endpoint-client.qcow2`
+
+Current observed size:
+
+- about `11.9G` real disk usage
+- `64G` virtual size
+
+Meaning:
+
+- the file is already compact enough to import
+- no extra duplicate qcow2 should be created unless there is a real failure
+
+### Upload path used for the lighter client image
+
+Because direct write into the dropfolder failed as `sysadmin`, the practical upload path is:
+
+1. upload to:
+   - `/var/tmp/win-endpoint-client.qcow2`
+2. move with `sudo` into:
+   - `/var/local/virl2/dropfolder/win-endpoint-client.qcow2`
+
+Meaning:
+
+- `/var/tmp` is the landing area with enough free space
+- `/var/local/virl2/dropfolder` is the folder CML scans for uploaded images
+
+Current controller-side file:
+
+- `/var/local/virl2/dropfolder/win-endpoint-client.qcow2`
+
+### What to do next for the lighter client image
+
+Blind next actions:
+
+1. refresh `Tools` -> `Node and Image Definitions`
+2. confirm `win-endpoint-client.qcow2` appears in uploaded images
+3. create a new image definition for it
+4. test which CML node-definition and hardware profile boot it cleanly
+
+Important:
+
+- this lighter client is UEFI-based, not the older BIOS-style Server endpoint
+- do not assume the same CML node-definition trick used for the Server image will be correct for this one
