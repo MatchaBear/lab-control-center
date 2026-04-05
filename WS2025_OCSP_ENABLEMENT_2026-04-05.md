@@ -1009,6 +1009,309 @@ What this means operationally:
 - revocation works
 - the remaining issue is a narrow web-serving cleanup item, not a broad PKI design failure
 
+## What changed during delta-CRL cleanup attempts
+
+### Why another inspection was needed
+
+After trying to suppress the broken HTTP delta CRL advertisement, a freshly issued leaf certificate still showed:
+
+- HTTP delta CRL URL present
+- and the OCSP URL started returning:
+  - `500 Internal Server Error`
+
+Revocation still passed overall, but this proved the cleanup was not finished and the behavior had changed.
+
+So the next step was to stop guessing and inspect the CA’s live registry-backed publication settings.
+
+## Live CA publication state during the delta-CRL cleanup phase
+
+### What was actually checked
+
+On `ws25-ica01`:
+
+```powershell
+certutil -getreg CA\CRLPublicationURLs
+certutil -getreg CA\CACertPublicationURLs
+Get-Service OCSPSvc,certsvc
+```
+
+### What the output showed
+
+#### CRL publication URLs
+
+Current CRL publication state:
+
+- local publish:
+  - `C:\WINDOWS\system32\CertSrv\CertEnroll\%3%8%9.crl`
+- LDAP publish/include:
+  - `ldap:///CN=%7%8,CN=%2,CN=CDP,CN=Public Key Services,CN=Services,%6%10`
+- file path:
+  - `file://%1/CertEnroll/%3%8%9.crl`
+- HTTP line:
+  - `http://pki.lab.local/CertEnroll/%3%8%9.crl`
+
+Important flag state on the HTTP line:
+
+- `CSURL_ADDTOFRESHESTCRL -- 4`
+- and **not** `CSURL_ADDTOCERTCDP -- 2`
+
+Plain-English meaning:
+
+- the HTTP line is still being used as a delta/freshest-CRL advertisement source
+- even though it is no longer being used as a base CDP inclusion line
+
+This explains why new certs can still carry:
+
+- `http://pki.lab.local/CertEnroll/LAB-ISSUINGCA-01+.crl`
+
+#### AIA / OCSP publication URLs
+
+Current AIA state:
+
+- local CA cert publish:
+  - `C:\WINDOWS\system32\CertSrv\CertEnroll\%1_%3%4.crt`
+- LDAP AIA:
+  - `ldap:///CN=%7,CN=AIA,CN=Public Key Services,CN=Services,%6%11`
+- file path:
+  - `file://%1/CertEnroll/%1_%3%4.crt`
+- OCSP URL:
+  - `http://ocsp.lab.local/ocsp`
+- HTTP AIA cert URL:
+  - `http://pki.lab.local/CertEnroll/%1_%3%4.crt`
+
+Important flag state:
+
+- `http://ocsp.lab.local/ocsp`
+  - `CSURL_ADDTOCERTOCSP -- 32`
+- `http://pki.lab.local/CertEnroll/%1_%3%4.crt`
+  - `CSURL_ADDTOCERTCDP -- 2`
+
+That confirms the intended separation is now correct:
+
+- OCSP uses `ocsp.lab.local`
+- AIA certificate download uses `pki.lab.local`
+
+### Service state at the same time
+
+At the moment this was captured:
+
+- `certsvc` = `Running`
+- `OCSPSvc` = `Running`
+
+So the later `500` response from the OCSP URL was **not** because the services were stopped.
+
+## Current interpretation after this inspection
+
+This is the exact state now:
+
+- CA service is healthy
+- OCSP service is healthy
+- AIA hostname is correct
+- OCSP hostname is correct
+- HTTP delta CRL is still being advertised through the `Freshest CRL` path
+- newly issued certs can still contain the `+.crl` URL for delta retrieval
+- the HTTP delta-CRL `404` is still unresolved
+- a later verification also showed OCSP returning `500`, which means responder health needs re-check after the CRL/extension changes
+
+## Why this matters
+
+This inspection proves the remaining delta-CRL issue is no longer a mystery about:
+
+- missing files
+- wrong CA hostname
+- wrong AIA hostname
+- wrong OCSP hostname
+
+Instead, it is now a focused issue around:
+
+- whether HTTP delta CRL advertisement should remain at all
+- and why OCSP started returning `500` after the later extension cleanup attempts
+
+That is a much narrower troubleshooting surface than before.
+
+## Final delta-CRL cleanup
+
+### What we wanted
+
+The goal was:
+
+- keep base CRL over HTTP
+- keep delta CRL available through LDAP
+- keep OCSP working
+- stop advertising a broken HTTP delta-CRL URL in newly issued certificates
+
+This is the clean lab design because:
+
+- HTTP base CRL is easy to test and publish
+- LDAP delta CRL already works for the Windows/AD side
+- OCSP already gives the faster revocation answer path
+- there is no value in keeping a broken HTTP `+.crl` URL in the certificates
+
+## Why the first cleanup attempt did not work
+
+### What was tried
+
+In the CA Extensions UI, the HTTP CDP line had:
+
+- `Include in CRLs. Clients use this to find Delta CRL locations`
+
+unchecked.
+
+### What was then observed
+
+A new leaf certificate still contained the HTTP delta CRL URL:
+
+- `http://pki.lab.local/CertEnroll/LAB-ISSUINGCA-01+.crl`
+
+and OCSP temporarily returned:
+
+- `500 Internal Server Error`
+
+### Why another inspection was needed
+
+This meant the actual persisted CA configuration had to be checked directly.
+
+## The direct registry-backed explanation
+
+### What was checked
+
+On `ws25-ica01`:
+
+```powershell
+certutil -getreg CA\CRLPublicationURLs
+```
+
+### What it showed
+
+The HTTP CDP line still existed as:
+
+- `http://pki.lab.local/CertEnroll/%3%8%9.crl`
+
+with flag:
+
+- `CSURL_ADDTOFRESHESTCRL -- 4`
+
+but without:
+
+- `CSURL_ADDTOCERTCDP -- 2`
+
+### Plain-English meaning
+
+That line was still being advertised as the `Freshest CRL` location.
+
+So newly issued certs could still contain the HTTP delta CRL URL even though the base CDP behavior on that line had already changed.
+
+## The final fix
+
+### What was actually performed
+
+In `certsrv.msc` on `LAB-ISSUINGCA-01`:
+
+1. opened `Properties`
+2. opened `Extensions`
+3. selected `CRL Distribution Point (CDP)`
+4. highlighted:
+   - `http://pki.lab.local/CertEnroll/%3%8%9.crl`
+5. unchecked:
+   - `Include in CRLs. Clients use this to find Delta CRL locations`
+
+Then:
+
+- applied the change
+- accepted CA service restart
+
+### What was run after the change
+
+On `ws25-ica01`:
+
+```powershell
+certutil -getreg CA\CRLPublicationURLs
+certutil -crl
+Copy-Item C:\Windows\System32\CertSrv\CertEnroll\*.crl -Destination C:\inetpub\wwwroot\CertEnroll\ -Force
+Restart-Service OCSPSvc
+```
+
+### What the live CA state became
+
+After the fix, the HTTP CRL line showed:
+
+- `0:http://pki.lab.local/CertEnroll/%3%8%9.crl`
+
+Meaning:
+
+- no `CSURL_ADDTOFRESHESTCRL`
+- no `CSURL_ADDTOCERTCDP`
+
+Plain-English result:
+
+- the HTTP line still exists in the CA config
+- but it is no longer being stamped into new certs
+- so new certs stop advertising the broken HTTP delta-CRL path
+
+## Final proof certificate after the delta-CRL cleanup
+
+### Why another fresh certificate was required
+
+As with every other extension change in this runbook:
+
+- old certificates keep old extensions
+- only newly issued certificates prove the new state
+
+So one final fresh `Web Server` certificate had to be issued.
+
+### Final proof certificate
+
+Thumbprint:
+
+- `0205187C878D02150224DF077CE1487A82E7B7DC`
+
+Export file:
+
+- `C:\CAConfig\ws25-ica01-webserver-test-final-no-http-delta.cer`
+
+## Final verification on the DC
+
+### What was actually run
+
+On the DC:
+
+```powershell
+certutil -urlfetch -verify C:\Windows\Temp\ws25-ica01-webserver-test-final-no-http-delta.cer
+```
+
+### What the output proved
+
+For the fresh leaf certificate:
+
+- AIA:
+  - HTTP AIA is correct:
+    - `http://pki.lab.local/CertEnroll/ws25-ica01.lab.local_LAB-ISSUINGCA-01.crt`
+- CDP:
+  - base CRL is reached through LDAP
+  - delta CRL is reached through LDAP
+  - the broken HTTP delta CRL URL is gone
+- OCSP:
+  - verified successfully:
+    - `http://ocsp.lab.local/ocsp`
+- final result:
+  - `Leaf certificate revocation check passed`
+
+## Final plain-English conclusion
+
+The revocation stack is now clean.
+
+What is true now:
+
+- root CA publication is good
+- issuing CA publication is good
+- AIA hostname is correct
+- OCSP hostname is correct
+- broken HTTP delta CRL advertisement is gone from new certs
+- OCSP works from a Windows client
+- overall revocation check passes cleanly
+
+This is the end-state that should be treated as the revocation baseline before template rollout.
+
 ## Operational lessons from this phase
 
 ### Lesson 1

@@ -72,10 +72,12 @@ Current truth:
 - manual CRL validation is still passing
 - client-side OCSP verification on a newly issued leaf certificate is now proven
 - remaining issue:
-  - HTTP delta CRL URL for `LAB-ISSUINGCA-01+.crl` still returns `404`
-  - file existence is confirmed in both the CA publish folder and IIS webroot
-  - the issue is now isolated to HTTP serving of the `+` filename
-  - this is currently a cleanup item, not a blocker
+  - previous HTTP delta CRL `404` has now been cleaned up by removing HTTP delta advertisement from new certs
+  - current design is:
+    - HTTP base CRL
+    - LDAP delta CRL
+    - HTTP OCSP
+  - this is now the accepted clean lab baseline
 
 ## Decision
 
@@ -88,13 +90,12 @@ Reason:
 - manual HTTP CRL/AIA checks are now good
 - OCSP server-side configuration is now good
 - client-side OCSP validation on a new issuing-CA leaf certificate is now captured
-- remaining delta CRL HTTP `404` does not prevent successful revocation checks in the current lab state
-- remaining delta CRL issue is isolated and no longer ambiguous
+- broken HTTP delta CRL advertisement has been removed from fresh certs
+- final fresh-cert verification is clean
 
 ## Minimum next step
 
 Next phase should be:
 
-1. optionally clean up the delta CRL HTTP `404`
-2. begin certificate templates and enrollment
-3. keep manual CRL and OCSP verification commands available during template rollout
+1. begin certificate templates and enrollment
+2. keep manual CRL and OCSP verification commands available during template rollout
