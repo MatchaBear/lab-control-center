@@ -440,6 +440,397 @@ The OCSP responder is now:
 - holding a valid OCSP signing certificate
 - able to use the issuing CA revocation data source
 
+## CA extension correction after OCSP came up
+
+### Why this phase was needed
+
+Even after the responder was `Working`, client verification with:
+
+```powershell
+certutil -urlfetch -verify <certfile>
+```
+
+still showed:
+
+- `Certificate OCSP  No URLs "None"`
+
+That looked wrong at first, but the reason matters:
+
+- the CA had an HTTP AIA path configured
+- the CA had an HTTP CDP path configured
+- but those HTTP paths were not being embedded into issued certificates because the correct checkboxes were not enabled on the CA properties
+
+### What was actually found
+
+On `LAB-ISSUINGCA-01`:
+
+```powershell
+certutil -getreg CA\CACertPublicationURLs
+certutil -getreg CA\CRLPublicationURLs
+```
+
+showed:
+
+- HTTP AIA entry existed but had flag `0`
+- HTTP CDP entry existed but had flag `0`
+
+Meaning in plain English:
+
+- the CA knew the HTTP publication paths
+- but it was not stamping those HTTP paths into newly issued certificates
+
+### What was actually changed in `certsrv.msc`
+
+In:
+
+- `LAB-ISSUINGCA-01` -> `Properties` -> `Extensions`
+
+#### AIA page
+
+For the `http://...` AIA line:
+
+- checked:
+  - `Include in the AIA extension of issued certificates`
+  - `Include in the online certificate status protocol (OCSP) extension`
+
+For the `ldap://...` AIA line:
+
+- left:
+  - `Include in the AIA extension of issued certificates`
+- did **not** try to force LDAP into the OCSP extension
+
+#### CDP page
+
+For the `http://...` CDP line:
+
+- checked:
+  - `Include in CRLs. Clients use this to find Delta CRL locations`
+  - `Include in the CDP extension of issued certificates`
+- left unchecked:
+  - `Publish CRLs to this location`
+  - `Publish Delta CRLs to this location`
+  - `Include in the IDP extension of issued CRLs`
+
+For the `ldap://...` CDP line:
+
+- kept the AD-oriented publish and include boxes enabled
+- left `Include in the IDP extension of issued CRLs` unchecked
+
+### What happened after Apply
+
+The CA service restarted cleanly and accepted the changes.
+
+Then the following was run on `ws25-ica01`:
+
+```powershell
+certutil -crl
+copy C:\Windows\System32\CertSrv\CertEnroll\*.crl C:\inetpub\wwwroot\CertEnroll\
+copy C:\Windows\System32\CertSrv\CertEnroll\*.crt C:\inetpub\wwwroot\CertEnroll\
+```
+
+### Important operational lesson
+
+This copy step is currently manual because:
+
+- AD CS publishes into:
+  - `C:\Windows\System32\CertSrv\CertEnroll\`
+- IIS serves:
+  - `C:\inetpub\wwwroot\CertEnroll\`
+
+So with the current lab design:
+
+- yes, CA publication refresh requires a manual sync step
+
+Better later fix:
+
+- point the IIS `CertEnroll` path directly at the AD CS `CertEnroll` folder
+- or automate the copy with a script or scheduled task
+
+Do **not** forget this, because stale HTTP files can make PKI troubleshooting look random.
+
+## Why verifying the issuing CA certificate still showed no OCSP
+
+### What was actually tested
+
+On the DC:
+
+```powershell
+Invoke-WebRequest -Uri "http://pki.lab.local/CertEnroll/ws25-ica01.lab.local_LAB-ISSUINGCA-01.crt" -OutFile "$env:TEMP\LAB-ISSUINGCA-01-ocsp-test-2.crt"
+certutil -urlfetch -verify "$env:TEMP\LAB-ISSUINGCA-01-ocsp-test-2.crt"
+```
+
+Observed result:
+
+- AIA verified
+- CRL verified
+- `Leaf certificate revocation check passed`
+- but:
+  - `Certificate OCSP  No URLs "None"`
+
+### Why this is not a contradiction
+
+This does **not** mean the OCSP responder is broken.
+
+It means:
+
+- the issuing CA certificate being tested was issued earlier by the root CA
+- CA extension changes on `LAB-ISSUINGCA-01` only affect **new certificates issued by `LAB-ISSUINGCA-01`**
+- they do **not** rewrite the already-issued issuing CA certificate
+
+Plain-English rule:
+
+- verifying the issuing CA certificate proves chain and CRL health
+- it does **not** prove that new end-entity certificates will advertise OCSP
+
+## Current go/no-go state after this phase
+
+What is now true:
+
+- root and issuing HTTP publication are healthy
+- OCSP responder is installed and `Working`
+- issuing CA extension settings are corrected for future certificates
+- manual CRL validation is still good
+
+What is still needed before calling OCSP fully client-validated:
+
+- issue at least one **new** certificate from `LAB-ISSUINGCA-01`
+- inspect that new cert for OCSP/AIA/CDP extensions
+- verify that new cert uses the OCSP path successfully
+
+## End-to-end OCSP proof on a newly issued leaf certificate
+
+### Why another test was required
+
+Verifying the issuing CA certificate itself was never enough to prove OCSP.
+
+Reason:
+
+- the issuing CA certificate was issued earlier by the root CA
+- changing issuing-CA AIA/CDP/OCSP settings does not rewrite that older CA certificate
+- only **new certificates issued by `LAB-ISSUINGCA-01`** can prove whether the corrected OCSP URL is being embedded properly
+
+So a fresh leaf certificate had to be issued.
+
+## Test leaf certificate issuance
+
+### What was suggested
+
+Publish a simple built-in template only for testing revocation behavior.
+
+Use:
+
+- template: `Web Server`
+- one machine only for initial test:
+  - `WS25-ICA01`
+
+### What was actually performed
+
+In `certsrv.msc` on `ws25-ica01`:
+
+1. `Certificate Templates`
+2. `New`
+3. `Certificate Template to Issue`
+4. selected:
+   - `Web Server`
+
+Initial enrollment attempts on both the DC and `ws25-ica01` failed with:
+
+- no permission to request the certificate
+
+### What was wrong
+
+The template was published, but the test machine had no template permissions.
+
+### What fixed it
+
+In `certtmpl.msc` as `LAB\Administrator`:
+
+1. opened `Web Server` template properties
+2. on `Security` tab, added:
+   - `WS25-ICA01`
+3. granted:
+   - `Read`
+   - `Enroll`
+
+Then on `ws25-ica01`:
+
+```powershell
+gpupdate /force
+```
+
+After that, `Web Server` became available in the local machine enrollment wizard.
+
+## Subject/SAN lesson on the Web Server template
+
+### What was observed
+
+The `Web Server` template showed:
+
+- `More information is required to enroll for this certificate`
+
+### What this means
+
+That template requires subject information, usually through SAN input.
+
+### What was actually entered
+
+During manual enrollment on `ws25-ica01`:
+
+- no Subject value was filled
+- SAN was added:
+  - type: `DNS`
+  - value: `ws25-ica01.lab.local`
+
+This was enough for the test certificate to enroll successfully.
+
+## First leaf certificate test and what it proved
+
+### First test leaf certificate
+
+Thumbprint:
+
+- `DCD2E99CDBA6EBBBC6FE93631E1E8302AED1F82E`
+
+This certificate was exported and verified from the DC.
+
+### What the DC-side verification showed
+
+The first new leaf certificate now contained revocation and AIA data from the issuing CA.
+
+But the output also exposed two problems:
+
+1. OCSP URL was wrong
+2. HTTP delta CRL path was returning `404`
+
+Observed wrong OCSP behavior:
+
+- `Certificate OCSP`
+- `Failed "OCSP"`
+- `405 Method not allowed`
+- URL used:
+  - `http://ws25-ica01.lab.local/CertEnroll/ws25-ica01.lab.local_LAB-ISSUINGCA-01.crt`
+
+### What this proved
+
+The CA was stamping the **CA certificate download URL** into the OCSP extension.
+
+That was wrong.
+
+It happened because the AIA HTTP `.crt` line had been marked for:
+
+- `Include in the online certificate status protocol (OCSP) extension`
+
+Plain-English meaning:
+
+- we accidentally told the CA to use the CA cert download path as the OCSP responder URL
+
+## OCSP URL correction
+
+### What was actually changed
+
+In `certsrv.msc` on `LAB-ISSUINGCA-01`, under `Extensions` -> `Authority Information Access (AIA)`:
+
+1. on the existing `http://...crt` line:
+   - **unchecked**:
+     - `Include in the online certificate status protocol (OCSP) extension`
+   - left checked:
+     - `Include in the AIA extension of issued certificates`
+
+2. added a new dedicated OCSP URL:
+   - `http://ocsp.lab.local/ocsp`
+
+3. on that new OCSP line:
+   - checked only:
+     - `Include in the online certificate status protocol (OCSP) extension`
+   - did **not** check:
+     - `Include in the AIA extension of issued certificates`
+
+Then:
+
+- applied the change
+- allowed CA service restart
+- regenerated CRLs
+- restarted `OCSPSvc`
+
+## Final leaf certificate proof
+
+### Why a second leaf certificate was needed
+
+The first test leaf still had the old bad OCSP URL embedded.
+
+So another **new** leaf certificate had to be issued after the CA extension fix.
+
+### Final test leaf certificate
+
+Thumbprint:
+
+- `78CD7479B05DB42668D5D90FA44D50B4E8FBF0E2`
+
+Exported to:
+
+- `C:\CAConfig\ws25-ica01-webserver-test-ocsp-fixed.cer`
+
+### Final verification result on the DC
+
+The DC-side command:
+
+```powershell
+certutil -urlfetch -verify C:\Windows\Temp\ws25-ica01-webserver-test-ocsp-fixed.cer
+```
+
+showed:
+
+- issuing CA AIA over LDAP and HTTP present
+- base CRL validation good
+- and most importantly:
+  - `Certificate OCSP`
+  - `Verified "OCSP"`
+  - URL:
+    - `http://ocsp.lab.local/ocsp`
+- `Leaf certificate revocation check passed`
+
+### Plain-English conclusion
+
+This is the real end-to-end OCSP proof.
+
+It proves:
+
+- the responder is alive
+- the CA is now embedding the correct OCSP URL into newly issued leaf certificates
+- a Windows client can successfully use that OCSP URL
+
+## Remaining non-blocking issue: HTTP delta CRL 404
+
+### What is still imperfect
+
+The final verification still showed:
+
+- `Failed "CDP"`
+- `404 Not found`
+- URL:
+  - `http://ws25-ica01.lab.local/CertEnroll/LAB-ISSUINGCA-01+.crl`
+
+### What this means
+
+The HTTP delta CRL publication path is not yet being served correctly under that hostname/path combination.
+
+But this did **not** block revocation success because:
+
+- LDAP delta CRL retrieval still worked
+- HTTP base CRL retrieval still worked
+- OCSP verification worked
+- overall revocation checking still passed
+
+### Current judgment
+
+This delta-CRL `404` is a cleanup item, not a hard blocker.
+
+Templates and enrollment can move forward once this state is recorded, because:
+
+- manual CRL validation is good
+- server-side OCSP is good
+- client-side OCSP on a new leaf cert is good
+
 ## Operational lessons from this phase
 
 ### Lesson 1

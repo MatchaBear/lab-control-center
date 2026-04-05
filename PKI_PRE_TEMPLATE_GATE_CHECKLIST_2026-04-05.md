@@ -52,39 +52,44 @@ The long evidence and failure history remain in:
 - [x] OCSP role installed
 - [x] OCSP responder signing certificate path fixed
 - [x] Revocation configuration on OCSP responder completed
-- [ ] AIA / OCSP URL design documented
-- [ ] OCSP response tested from a Windows client
+- [x] AIA / OCSP URL design documented
+- [x] OCSP response tested from a Windows client on a newly issued leaf certificate
 
 Current truth:
 
 - `ADCS-Online-Cert` on `ws25-ica01` is `Installed`
 - `OCSPSvc` is running
 - `ocsp.msc` shows revocation configuration `LAB-ISSUINGCA-01` as `Working`
+- issuing CA AIA/CDP HTTP embedding has now been corrected for future issued certificates
 - the earlier `Bad signing certificate on Array controller` error was fixed by:
   - granting `WS25-ICA01` template permissions on `OCSP Response Signing`
   - forcing policy/autoenrollment refresh
   - manually enrolling the signer certificate
   - restarting `OCSPSvc`
 - OCSP is now enabled at the server side
-- client-side OCSP verification is still pending
+- manual CRL validation is still passing
+- client-side OCSP verification on a newly issued leaf certificate is now proven
+- remaining issue:
+  - HTTP delta CRL URL for `LAB-ISSUINGCA-01+.crl` still returns `404`
+  - this is currently a cleanup item, not a blocker
 
 ## Decision
 
 Current decision:
 
-- **Still do not start certificate templates or enrollment yet**
+- **PKI revocation gate is satisfied. Templates and enrollment may begin.**
 
 Reason:
 
 - manual HTTP CRL/AIA checks are now good
 - OCSP server-side configuration is now good
-- but client-side OCSP validation has not been captured yet
+- client-side OCSP validation on a new issuing-CA leaf certificate is now captured
+- remaining delta CRL HTTP `404` does not prevent successful revocation checks in the current lab state
 
 ## Minimum next step
 
 Next phase should be:
 
-1. document the OCSP URL design explicitly
-2. verify revocation over OCSP from a Windows client
-3. verify manual CRL fetch still works after OCSP enablement
-4. only then begin certificate templates and enrollment
+1. record the delta CRL `404` as a cleanup item
+2. begin certificate templates and enrollment
+3. keep manual CRL and OCSP verification commands available during template rollout
