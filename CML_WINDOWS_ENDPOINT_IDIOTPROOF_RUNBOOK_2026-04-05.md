@@ -1493,3 +1493,164 @@ Important:
 
 - this lighter client is UEFI-based, not the older BIOS-style Server endpoint
 - do not assume the same CML node-definition trick used for the Server image will be correct for this one
+
+### What actually happened in this lab for the Windows IoT image
+
+The first direct attempts failed for predictable reasons:
+
+1. `Server` image definition with `EFI Boot ON`
+- CML error:
+  - `Unexpected error EFI Code for node definition is missing`
+- Meaning:
+  - the built-in `server` node definition in this CML build does not include EFI metadata
+
+2. `Desktop` image definition with `EFI Boot ON`
+- CML error:
+  - `Unexpected error EFI Code for node definition is missing`
+- Meaning:
+  - the built-in `desktop` node definition also lacks the EFI metadata required by this controller build
+
+3. Trying to reuse the same consumed uploaded qcow from the GUI
+- Problem:
+  - the file stopped appearing in `Uploaded Images`
+- Meaning:
+  - CML had already consumed it into an image definition
+- Workaround used:
+  - create a second filename that points to the same file, without duplicating the 12G image
+
+### No-extra-space workaround that was used
+
+Managed CML file after import:
+
+- `/var/lib/libvirt/images/virl-base-images/windows-iot-client/win-endpoint-client.qcow2`
+
+Fresh GUI-visible filename that was created without a real copy:
+
+- `/var/local/virl2/dropfolder/win-endpoint-client-desktop.qcow2`
+
+Important:
+
+- this was a hard link, not a second full qcow2
+- it did not consume another 12G
+- it was only used so CML would offer the image again in the GUI for a second image definition
+
+### Windows IoT image definitions that now exist
+
+Original first image definition:
+
+- `windows-iot-client`
+
+Second image definition used for the desktop-style path:
+
+- `windows-iot-client-desktop`
+
+Important:
+
+- the second image definition is the one tied to the newer UEFI desktop work
+
+### New custom UEFI node definition that was created
+
+Custom node definition ID:
+
+- `windows-uefi-desktop`
+
+Why it was needed:
+
+- both built-in `desktop` and built-in `server` were missing EFI metadata
+- the Windows IoT image is UEFI-based and expects modern Windows boot conditions
+
+Important fields discovered from the CML UI bundle:
+
+- `efi_boot`
+- `efi_code`
+- `efi_vars`
+- `machine_type`
+- `enable_tpm`
+- `enable_rng`
+
+Final custom UEFI node-definition choices:
+
+- `disk_driver: sata`
+- `nic_driver: e1000`
+- `efi_boot: true`
+- `efi_code: OVMF_CODE_4M.ms.fd`
+- `efi_vars: OVMF_VARS_4M.ms.fd`
+- `machine_type: q35`
+- `enable_tpm: true`
+- `enable_rng: true`
+
+Meaning:
+
+- SATA was chosen to avoid storage-driver surprises
+- `e1000` was chosen because Windows handles it well
+- `q35` was required because secure boot support in libvirt demanded it
+- TPM was enabled because Windows 11 expects it
+
+### Important errors and what they meant
+
+Observed backend error:
+
+- `Secure boot is supported with q35 machine types only`
+
+Meaning:
+
+- EFI was no longer the missing piece
+- the machine type was wrong
+- adding `machine_type: q35` to the custom node definition was required
+
+Observed backend error after that:
+
+- `Failed to open file '/var/lib/libvirt/images/virl-base-images/windows-iot-client-desktop/OVMF_VARS_4M.ms.fd': No such file or directory`
+
+Meaning:
+
+- this CML build expected the EFI firmware files to exist next to the managed image definition directory
+- it was not enough to only reference the firmware names in the node definition
+
+### Final firmware-file fix that was applied
+
+Two symlinks were created inside the managed image directory:
+
+- `/var/lib/libvirt/images/virl-base-images/windows-iot-client-desktop/OVMF_CODE_4M.ms.fd`
+- `/var/lib/libvirt/images/virl-base-images/windows-iot-client-desktop/OVMF_VARS_4M.ms.fd`
+
+These point to:
+
+- `/usr/share/OVMF/OVMF_CODE_4M.ms.fd`
+- `/usr/share/OVMF/OVMF_VARS_4M.ms.fd`
+
+Meaning:
+
+- no large file copy was needed
+- CML can now find the EFI firmware files where it expects them for this image
+
+### How the lab node was finally bound
+
+The GUI could not expose the new custom node-definition relationship cleanly.
+
+So the fresh lab node:
+
+- `desktop-1`
+
+was rebound controller-side to:
+
+- `node_definition = windows-uefi-desktop`
+- `image_definition = windows-iot-client-desktop`
+
+Meaning:
+
+- the visible node label stayed `desktop-1`
+- but under the hood it is no longer a stock Alpine desktop
+- it is now the Windows IoT UEFI test node
+
+### Current status at the end of this document update
+
+Current strongest signal:
+
+- the user reported that it appears to be working and just taking time
+
+Meaning:
+
+- the boot path is likely finally close enough for Windows to proceed
+- do not interrupt the node too early
+- first boot under a fresh CML hardware profile can take time

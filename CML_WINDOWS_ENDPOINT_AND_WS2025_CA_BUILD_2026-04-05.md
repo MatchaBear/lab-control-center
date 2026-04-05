@@ -605,3 +605,179 @@ That has already been proven.
 The next question is:
 
 - which CML node-definition and image-definition combination cleanly boots the UEFI-based Windows 11 IoT LTSC client image
+
+---
+
+## Later detailed troubleshooting for the Windows 11 IoT UEFI image inside CML
+
+### First conclusion
+
+The finished Windows 11 IoT LTSC qcow2 itself was not the problem.
+
+What had already been proven before the CML import stage:
+
+- it installed successfully on local libvirt
+- it reached a usable Windows desktop
+- it could boot without the installer ISO still attached
+
+So the remaining problems were fully in the CML definition and startup path.
+
+### Why the first built-in node definitions failed
+
+The first attempts used built-in node definitions:
+
+- `server`
+- `desktop`
+
+Both were tried with:
+
+- `EFI Boot = ON`
+
+Observed GUI/backend error:
+
+- `Unexpected error EFI Code for node definition is missing`
+
+Meaning:
+
+- this specific CML 2.9.1 build exposes EFI controls in the image-definition workflow
+- but the stock built-in node definitions do not carry the EFI metadata that the backend requires
+
+So the built-ins were not enough for a modern Windows 11 UEFI guest.
+
+### Why a second image-definition filename was needed
+
+After the first image definition consumed the uploaded qcow2, the file stopped appearing again in the GUI upload list.
+
+That did not mean the data was gone.
+
+It meant CML had already consumed it into a managed image-definition directory.
+
+Managed path found on the controller:
+
+- `/var/lib/libvirt/images/virl-base-images/windows-iot-client/win-endpoint-client.qcow2`
+
+To make the same data appear again in the GUI without wasting disk space, a second hard-linked filename was created:
+
+- `/var/local/virl2/dropfolder/win-endpoint-client-desktop.qcow2`
+
+Important:
+
+- this was not a real duplicate 12G copy
+- it was just another directory entry pointing to the same underlying file
+
+That enabled creation of the second image definition:
+
+- `windows-iot-client-desktop`
+
+### New custom node definition created for UEFI Windows
+
+A custom node definition was created because the built-ins were insufficient:
+
+- `windows-uefi-desktop`
+
+Fields discovered from the shipped CML UI bundle:
+
+- `efi_boot`
+- `efi_code`
+- `efi_vars`
+- `machine_type`
+- `enable_rng`
+- `enable_tpm`
+
+Final UEFI node-definition choices:
+
+- `disk_driver: sata`
+- `nic_driver: e1000`
+- `efi_boot: true`
+- `efi_code: OVMF_CODE_4M.ms.fd`
+- `efi_vars: OVMF_VARS_4M.ms.fd`
+- `machine_type: q35`
+- `enable_tpm: true`
+- `enable_rng: true`
+
+This was deliberately different from the earlier BIOS-style Windows Server workaround.
+
+The Windows 11 IoT image is:
+
+- UEFI-based
+- TPM-aware
+- happier on a more modern virtual hardware profile
+
+### Why `machine_type: q35` mattered
+
+After the first custom UEFI node-definition attempt, the backend error changed to:
+
+- `Secure boot is supported with q35 machine types only`
+
+Meaning:
+
+- EFI metadata was now being read
+- but libvirt rejected the generated domain because the machine type was still not correct
+
+Adding:
+
+- `machine_type: q35`
+
+was required to move past that validation failure.
+
+### Why OVMF symlinks had to be added beside the image
+
+After the `q35` fix, the next backend error became:
+
+- `Failed to open file '/var/lib/libvirt/images/virl-base-images/windows-iot-client-desktop/OVMF_VARS_4M.ms.fd': No such file or directory`
+
+Meaning:
+
+- this CML build expected the EFI firmware files to exist relative to the managed image-definition directory
+- simply naming the firmware files in the node definition was not enough
+
+So two symlinks were created in the managed image-definition directory:
+
+- `/var/lib/libvirt/images/virl-base-images/windows-iot-client-desktop/OVMF_CODE_4M.ms.fd`
+- `/var/lib/libvirt/images/virl-base-images/windows-iot-client-desktop/OVMF_VARS_4M.ms.fd`
+
+pointing to:
+
+- `/usr/share/OVMF/OVMF_CODE_4M.ms.fd`
+- `/usr/share/OVMF/OVMF_VARS_4M.ms.fd`
+
+This fixed the missing-file expectation without copying large firmware blobs.
+
+### How the lab node was ultimately mapped
+
+Because the GUI picker stopped exposing the Windows IoT image definition once it no longer matched the stock `desktop` node type, the lab node had to be rebound controller-side.
+
+Fresh lab node created by the user:
+
+- `desktop-1`
+
+Controller-side rebinding applied:
+
+- `node_definition = windows-uefi-desktop`
+- `image_definition = windows-iot-client-desktop`
+
+Meaning:
+
+- the visible node name in the lab stayed `desktop-1`
+- but it no longer represented a stock Alpine desktop node under the hood
+
+### Current end-state at the time of this update
+
+The user’s latest observation was:
+
+- it appears to be working and just taking time
+
+That is significant.
+
+It means the work moved from:
+
+- hard validation failures
+- missing EFI metadata
+- wrong machine type
+- missing firmware paths
+
+to:
+
+- a likely real guest boot attempt
+
+This is the strongest signal so far that the Windows 11 IoT LTSC image can be made to run inside this CML environment with the correct custom UEFI node definition.
