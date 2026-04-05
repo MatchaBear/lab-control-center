@@ -166,6 +166,239 @@ Meaning:
 - the role install is still in the Windows servicing phase
 - it should be left alone until the feature flips to `Installed`
 
+### Subordinate CA request generated successfully
+
+After the role payload settled enough for ADCS deployment cmdlets to load:
+
+- `Install-AdcsCertificationAuthority` was available
+- a subordinate CA request file was successfully generated at:
+  - `C:\CAConfig\LAB-ISSUINGCA-01.req`
+
+Observed request file size:
+
+- `1900` bytes
+
+The request begins with:
+
+- `-----BEGIN NEW CERTIFICATE REQUEST-----`
+
+Meaning:
+
+- the issuing CA successfully generated a real subordinate CA CSR
+- this CSR was ready to be signed by the offline root
+
+### Root CA signing succeeded
+
+The request was copied from `ws25-ica01` to `ws2025-rootca01`.
+
+The root CA database later confirmed:
+
+- `RequestID = 3`
+- `Disposition = Issued`
+- `Request Common Name = LAB-ISSUINGCA-01`
+- `Certificate Template = SubCA`
+
+Meaning:
+
+- the root CA did actually issue the subordinate CA certificate
+
+### Root artifacts returned from the root CA
+
+The following artifacts were copied back from the root CA side:
+
+- `LAB-ISSUINGCA-01.cer`
+- `LAB-ROOTCA-01.cer`
+- `LAB-ROOTCA-01.crl`
+
+These were placed on `ws25-ica01` under:
+
+- `C:\CAConfig`
+
+### Current blocker at the time of this update
+
+The remaining incomplete step is:
+
+- installing the returned subordinate CA certificate into the pending CA instance on `ws25-ica01`
+
+What was observed:
+
+- `certsvc` exists
+- `certsvc` startup type is `Automatic`
+- `certsvc` is still `Stopped`
+- Application event log shows:
+  - `Microsoft-Windows-CertificationAuthority`
+  - Event ID `27`
+  - message: `Hierarchical setup is incomplete`
+
+Meaning:
+
+- the CA instance exists
+- the issued subordinate certificate has not yet been fully bound to the CA service
+
+Important observation:
+
+- the returned `.rsp` file from the root was only a pending CMC response
+- the actual issued subordinate certificate had to be explicitly retrieved later as:
+  - `LAB-ISSUINGCA-01.cer`
+
+### Why automation is paused here
+
+The final install step:
+
+- `certutil -installcert C:\CAConfig\LAB-ISSUINGCA-01.cer`
+
+appears to fall into an interactive console path on `ws25-ica01`.
+
+Over SSH this path does not render a usable prompt, so:
+
+- the command hangs
+- the CA certificate does not land in `Cert:\LocalMachine\CA`
+- `certsvc` stays stopped
+
+This is now a narrow finish-step problem, not a broad build failure.
+
+### Manual finish step currently required
+
+From an RDP session on `ws25-ica01`, complete the CA certificate installation locally using the visible Windows console or Certification Authority management UI.
+
+Artifacts already present on the server:
+
+- `C:\CAConfig\LAB-ISSUINGCA-01.cer`
+- `C:\CAConfig\LAB-ROOTCA-01.cer`
+- `C:\CAConfig\LAB-ROOTCA-01.crl`
+
+After that manual bind step succeeds, the next checks should be:
+
+```powershell
+Get-ChildItem Cert:\LocalMachine\CA
+Get-Service certsvc
+certutil -crl
+```
+
+Expected good result:
+
+- `CN=LAB-ISSUINGCA-01` appears in `Cert:\LocalMachine\CA`
+- `certsvc` reaches `Running`
+- issuing CRL generation succeeds
+
+## Final completion state
+
+The manual finish step was later completed successfully on `ws25-ica01`.
+
+Observed final commands and results:
+
+```powershell
+certutil -installcert C:\CAConfig\LAB-ISSUINGCA-01.cer
+Start-Service certsvc
+Get-Service certsvc
+Get-ChildItem Cert:\LocalMachine\CA
+certutil -crl
+Get-ChildItem C:\Windows\System32\CertSrv\CertEnroll
+```
+
+Observed good results:
+
+- `certutil -installcert C:\CAConfig\LAB-ISSUINGCA-01.cer` completed successfully
+- `certsvc` is `Running`
+- `CN=LAB-ISSUINGCA-01, DC=lab, DC=local` appears in `Cert:\LocalMachine\CA`
+- issuing CRL generation succeeded
+- CertEnroll now contains:
+  - `LAB-ISSUINGCA-01+.crl`
+  - `LAB-ISSUINGCA-01.crl`
+  - `ws25-ica01.lab.local_LAB-ISSUINGCA-01.crt`
+
+Meaning:
+
+- the issuing CA is now online
+- the CA certificate is bound to the CA service
+- the CA can publish its CRL and certificate artifacts
+
+## Important failure lesson: `.rsp` was not the final issued CA certificate
+
+One important mistake happened during the ceremony:
+
+- the first file copied back from the root CA was `LAB-ISSUINGCA-01.rsp`
+
+Why that failed:
+
+- that `.rsp` file was only a `CMC pending response`
+- it was not the final issued subordinate CA certificate
+- `certutil -dump` showed:
+  - `CMC_STATUS_PENDING`
+  - `Taken Under Submission`
+
+Meaning:
+
+- the file looked like a response from the root CA
+- but it was only the submission/pending wrapper
+- it could not complete the issuing CA installation
+
+The correct fix was:
+
+1. Query the root CA database:
+   - confirm the request disposition was actually `Issued`
+2. Retrieve the actual issued certificate by request ID from the root CA:
+   - this produced `LAB-ISSUINGCA-01.cer`
+3. Copy that real `.cer` back to `ws25-ica01`
+4. Install the `.cer`, not the earlier `.rsp`
+
+Practical rule for future ceremonies:
+
+- do not assume the first `.rsp` copied from the root is the final subordinate CA certificate
+- confirm whether the file is pending or issued before trying to bind it to the subordinate CA
+
+## Important failure lesson: revocation prompt and why cancel first was correct
+
+During the manual certificate-install step, a Windows prompt appeared:
+
+- revocation checking could not complete
+- the revocation server was offline
+
+Why that happened:
+
+- the issuing CA was trying to validate the root CA chain while the root CRL state was not yet trusted locally in a usable way
+- the root CA was also offline, so online revocation lookups were not going to work automatically
+
+Why `Cancel` first was the right move:
+
+- clicking through immediately would have hidden the real PKI publication/trust issue
+- the safe move was to stop first and make sure the root cert and root CRL were imported correctly
+
+What was done to reduce the prompt problem:
+
+```powershell
+certutil -addstore -f Root C:\CAConfig\LAB-ROOTCA-01.cer
+certutil -addstore -f CA C:\CAConfig\LAB-ROOTCA-01.cer
+certutil -addstore -f CA C:\CAConfig\LAB-ROOTCA-01.crl
+certutil -urlcache * delete
+certutil -dump C:\CAConfig\LAB-ROOTCA-01.crl
+certutil -store CA
+certutil -store Root
+```
+
+Meaning:
+
+- the root certificate was explicitly trusted
+- the root CRL was explicitly placed in the CA store
+- cached revocation data was cleared
+- the local machine could now validate the root CRL object itself
+
+Practical lesson for future ceremonies:
+
+1. Import the root cert first.
+2. Import the root CRL before installing the subordinate CA cert.
+3. Clear URL cache if revocation behavior looks stale.
+4. Only proceed with the subordinate cert install after verifying:
+   - `certutil -store Root`
+   - `certutil -store CA`
+   - `certutil -dump <root CRL>`
+
+This is the better path because:
+
+- it reduces avoidable revocation prompts
+- it makes later `pkiview.msc` troubleshooting easier
+- it avoids masking a real CDP/CRL publication problem behind a one-time prompt acceptance
+
 ## Exact commands used from the Ubuntu host
 
 ### Verify issuing server identity and state
@@ -202,4 +435,49 @@ sshpass -p 'P@ssw0rd' ssh -o StrictHostKeyChecking=no Administrator@192.168.122.
 sshpass -p 'P@ssw0rd' ssh -o StrictHostKeyChecking=no Administrator@192.168.122.196 "powershell -NoProfile -Command \"Get-WindowsFeature ADCS-Cert-Authority | Select-Object Name,InstallState | Out-String -Width 200\""
 sshpass -p 'P@ssw0rd' ssh -o StrictHostKeyChecking=no Administrator@192.168.122.196 "powershell -NoProfile -Command \"Get-Process TrustedInstaller,dism -ErrorAction SilentlyContinue | Select-Object Name,Id,CPU,StartTime | Format-Table -AutoSize | Out-String -Width 200\""
 sshpass -p 'P@ssw0rd' ssh -o StrictHostKeyChecking=no Administrator@192.168.122.196 "powershell -NoProfile -Command \"Get-Content C:\Windows\Logs\DISM\dism.log -Tail 20\""
+```
+
+### Generate the subordinate CA request
+
+```bash
+sshpass -p 'P@ssw0rd' ssh -o StrictHostKeyChecking=no Administrator@192.168.122.196 "powershell -NoProfile -ExecutionPolicy Bypass -File C:\Windows\Temp\configure-issuingca.ps1"
+sshpass -p 'P@ssw0rd' ssh -o StrictHostKeyChecking=no Administrator@192.168.122.196 "powershell -NoProfile -Command \"Get-ChildItem 'C:\CAConfig' | Select-Object Name,Length,LastWriteTime | Format-Table -AutoSize | Out-String -Width 200\""
+```
+
+### Sign the subordinate request on the root CA
+
+```bash
+sshpass -p 'P@ssw0rd' scp -O -o StrictHostKeyChecking=no Administrator@192.168.122.196:/C:/CAConfig/LAB-ISSUINGCA-01.req /home/hadescloak/LAB-ISSUINGCA-01.req
+sshpass -p 'P@ssw0rd' scp -O -o StrictHostKeyChecking=no /home/hadescloak/sign-subca-request.ps1 Administrator@192.168.122.98:/C:/Windows/Temp/sign-subca-request.ps1
+sshpass -p 'P@ssw0rd' ssh -o StrictHostKeyChecking=no Administrator@192.168.122.98 "powershell -NoProfile -Command \"New-Item -ItemType Directory -Path 'C:\CAInbox' -Force | Out-Null; New-Item -ItemType Directory -Path 'C:\CAOutbox' -Force | Out-Null\""
+sshpass -p 'P@ssw0rd' scp -O -o StrictHostKeyChecking=no /home/hadescloak/LAB-ISSUINGCA-01.req Administrator@192.168.122.98:/C:/CAInbox/LAB-ISSUINGCA-01.req
+sshpass -p 'P@ssw0rd' ssh -o StrictHostKeyChecking=no Administrator@192.168.122.98 "powershell -NoProfile -Command \"certutil -view -restrict \\\"Request.CommonName=LAB-ISSUINGCA-01\\\" -out \\\"RequestID,Disposition,Request.CommonName,CertificateTemplate\\\"\""
+sshpass -p 'P@ssw0rd' ssh -o StrictHostKeyChecking=no Administrator@192.168.122.98 "powershell -NoProfile -Command \"Remove-Item 'C:\CAOutbox\LAB-ISSUINGCA-01.rsp' -Force -ErrorAction SilentlyContinue; certreq -retrieve -config 'ws2025-rootca01\\LAB-ROOTCA-01' 3 C:\CAOutbox\LAB-ISSUINGCA-01.cer\""
+```
+
+### Return issued subordinate cert and root chain
+
+```bash
+sshpass -p 'P@ssw0rd' scp -O -o StrictHostKeyChecking=no Administrator@192.168.122.98:/C:/CAOutbox/LAB-ISSUINGCA-01.cer /home/hadescloak/LAB-ISSUINGCA-01.cer
+sshpass -p 'P@ssw0rd' scp -O -o StrictHostKeyChecking=no Administrator@192.168.122.98:/C:/CA-Exports/LAB-ROOTCA-01.cer /home/hadescloak/LAB-ROOTCA-01.cer
+sshpass -p 'P@ssw0rd' scp -O -o StrictHostKeyChecking=no Administrator@192.168.122.98:/C:/CA-Exports/LAB-ROOTCA-01.crl /home/hadescloak/LAB-ROOTCA-01.crl
+sshpass -p 'P@ssw0rd' scp -O -o StrictHostKeyChecking=no /home/hadescloak/LAB-ISSUINGCA-01.cer /home/hadescloak/LAB-ROOTCA-01.cer /home/hadescloak/LAB-ROOTCA-01.crl Administrator@192.168.122.196:/C:/CAConfig/
+```
+
+### Final manual bind and activation
+
+```powershell
+certutil -addstore -f Root C:\CAConfig\LAB-ROOTCA-01.cer
+certutil -addstore -f CA C:\CAConfig\LAB-ROOTCA-01.cer
+certutil -addstore -f CA C:\CAConfig\LAB-ROOTCA-01.crl
+certutil -urlcache * delete
+certutil -dump C:\CAConfig\LAB-ROOTCA-01.crl
+certutil -store CA
+certutil -store Root
+certutil -installcert C:\CAConfig\LAB-ISSUINGCA-01.cer
+Start-Service certsvc
+Get-Service certsvc
+Get-ChildItem Cert:\LocalMachine\CA
+certutil -crl
+Get-ChildItem C:\Windows\System32\CertSrv\CertEnroll
 ```
