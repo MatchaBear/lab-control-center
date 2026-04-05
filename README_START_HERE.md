@@ -84,6 +84,12 @@ If your goal is "I want to...":
 - Open: [CLEARPASS_AD_SITE_OFFLINE_LAB_2026.md](./CLEARPASS_AD_SITE_OFFLINE_LAB_2026.md)
 - Baseline Windows build: [WINDOWS_AD_TEMPLATE_VM_GUIDE_2026.md](./WINDOWS_AD_TEMPLATE_VM_GUIDE_2026.md)
 
+21. Understand the current Windows endpoint for CML and the new Windows Server 2025 root and issuing CA build state
+- Open: [CML_WINDOWS_ENDPOINT_AND_WS2025_CA_BUILD_2026-04-05.md](./CML_WINDOWS_ENDPOINT_AND_WS2025_CA_BUILD_2026-04-05.md)
+
+22. Follow a blind step-by-step manual to import and register the Windows endpoint image in CML
+- Open: [CML_WINDOWS_ENDPOINT_IDIOTPROOF_RUNBOOK_2026-04-05.md](./CML_WINDOWS_ENDPOINT_IDIOTPROOF_RUNBOOK_2026-04-05.md)
+
 ---
 
 ## Recommended Order (First Time User)
