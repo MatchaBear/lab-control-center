@@ -49,32 +49,42 @@ The long evidence and failure history remain in:
 
 ## OCSP gate
 
-- [ ] OCSP role installed
-- [ ] OCSP responder signing certificate planned
+- [x] OCSP role installed
+- [x] OCSP responder signing certificate path fixed
+- [x] Revocation configuration on OCSP responder completed
 - [ ] AIA / OCSP URL design documented
-- [ ] Revocation configuration on OCSP responder completed
 - [ ] OCSP response tested from a Windows client
 
 Current truth:
 
-- `ADCS-Online-Cert` on `ws25-ica01` is still `Available`
-- OCSP is **not enabled yet**
+- `ADCS-Online-Cert` on `ws25-ica01` is `Installed`
+- `OCSPSvc` is running
+- `ocsp.msc` shows revocation configuration `LAB-ISSUINGCA-01` as `Working`
+- the earlier `Bad signing certificate on Array controller` error was fixed by:
+  - granting `WS25-ICA01` template permissions on `OCSP Response Signing`
+  - forcing policy/autoenrollment refresh
+  - manually enrolling the signer certificate
+  - restarting `OCSPSvc`
+- OCSP is now enabled at the server side
+- client-side OCSP verification is still pending
 
 ## Decision
 
 Current decision:
 
-- **Do not start certificate templates or enrollment yet**
+- **Still do not start certificate templates or enrollment yet**
 
 Reason:
 
 - manual HTTP CRL/AIA checks are now good
-- but OCSP is not installed or validated yet
+- OCSP server-side configuration is now good
+- but client-side OCSP validation has not been captured yet
 
 ## Minimum next step
 
 Next phase should be:
 
-1. install and configure OCSP
-2. verify revocation over OCSP and manual CRL fetch both work
-3. only then begin certificate templates and enrollment
+1. document the OCSP URL design explicitly
+2. verify revocation over OCSP from a Windows client
+3. verify manual CRL fetch still works after OCSP enablement
+4. only then begin certificate templates and enrollment
